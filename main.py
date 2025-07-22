@@ -78,6 +78,7 @@ def game_loop(multiplayer=False):
         player2_y = HEIGHT - PLAYER_HEIGHT - 20
         player2_rect = pygame.Rect(player2_x, player2_y, PLAYER_WIDTH, PLAYER_HEIGHT)
         player2_bullets = []
+        player2_shoot_cooldown = 0  # Add cooldown for player 2 shooting
     meteors = []
     enemies = []
     meteor_timer = 0
@@ -110,9 +111,13 @@ def game_loop(multiplayer=False):
                 player2_x -= PLAYER_SPEED
             if keys[pygame.K_d] and player2_x < WIDTH - PLAYER_WIDTH:
                 player2_x += PLAYER_SPEED
+            # Add cooldown to prevent rapid fire
+            if player2_shoot_cooldown > 0:
+                player2_shoot_cooldown -= 1
             if keys[pygame.K_LSHIFT]:
-                if len(player2_bullets) == 0 or player2_bullets[-1][1] < player2_y - 20:
+                if (len(player2_bullets) == 0 or player2_bullets[-1][1] < player2_y - 20) and player2_shoot_cooldown == 0:
                     player2_bullets.append([player2_x + PLAYER_WIDTH // 2 - BULLET_WIDTH // 2, player2_y])
+                    player2_shoot_cooldown = 10  # Adjust for desired fire rate
             player2_rect.x = player2_x
 
         # Meteors from top, angled down
