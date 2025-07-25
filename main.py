@@ -17,6 +17,8 @@ METEOR_IMG = pygame.image.load(os.path.join(ASSET_DIR, "meteor.png"))
 METEOR_IMG = pygame.transform.scale(METEOR_IMG, (40, 40))
 ENEMY_IMG = pygame.image.load(os.path.join(ASSET_DIR, "enemy.png"))
 ENEMY_IMG = pygame.transform.scale(ENEMY_IMG, (50, 40))
+ENEMY_ZIGZAG_IMG = pygame.image.load(os.path.join(ASSET_DIR, "enemy_zigzag.png"))
+ENEMY_ZIGZAG_IMG = pygame.transform.scale(ENEMY_ZIGZAG_IMG, (50, 40))
 BG_IMG = pygame.image.load(os.path.join(ASSET_DIR, "space_bg.png"))
 BG_IMG = pygame.transform.scale(BG_IMG, (WIDTH, HEIGHT))
 BOSSSHIP_IMG = pygame.image.load(os.path.join(ASSET_DIR, "bossship1.png"))
@@ -89,6 +91,9 @@ def game_loop(multiplayer=False):
     enemy_timer = 0
     run = True
     game_over = False
+    level = 1
+    zigzag_enemies = []
+    zigzag_spawn_timer = 0
 
     # Boss variables
     boss_active = False
@@ -103,6 +108,7 @@ def game_loop(multiplayer=False):
     boss_fire_timer = 0
     boss_burst_count = 0
     boss_burst_pause = 0
+    boss_defeated = False
 
     while run:
         clock.tick(60)
@@ -113,7 +119,7 @@ def game_loop(multiplayer=False):
                 return "quit"
 
         # --- Boss Trigger ---
-        if not boss_active:
+        if not boss_active and not boss_defeated:
             if (not multiplayer and player1_score >= 50) or (multiplayer and player1_score + player2_score >= 50):
                 boss_active = True
                 boss_intro = True
@@ -143,8 +149,8 @@ def game_loop(multiplayer=False):
                     player2_shoot_cooldown = 10
             player2_rect.x = player2_x
 
-        # --- Normal Enemies and Meteors ---
-        if not boss_active:
+        # --- Level 1: Normal Enemies and Meteors ---
+        if not boss_active and not boss_defeated and level == 1:
             meteor_timer += 1
             if meteor_timer > 30:
                 meteor_timer = 0
@@ -279,7 +285,84 @@ def game_loop(multiplayer=False):
                         WIN.blit(score2_text, (WIDTH//2 - score2_text.get_width()//2, HEIGHT//2 + 30))
                     pygame.display.flip()
                     pygame.time.wait(2500)
-                    return "restart"
+                    boss_active = False
+                    boss_defeated = True
+                    level = 2
+                    continue
+
+        # --- Level 2: Zigzag Enemies ---
+        if boss_defeated and level == 2:
+            zigzag_spawn_timer += 1
+            if zigzag_spawn_timer > 60:  # spawn every second
+                zigzag_spawn_timer = 0
+                # Randomly choose left or right entry
+                from_left = random.choice([True, False])
+                if from_left:
+                    x = 0
+                    vx = 5
+                else:
+                    x = WIDTH - 50
+                    vx = -5
+                y = random.randint(50, HEIGHT // 2)
+                vy = random.choice([3, 4])
+                zigzag_enemies.append([x, y, vx, vy])
+
+            for z in zigzag_enemies[:]:
+                # Move
+                z[0] += z[2]
+                z[1] += z[3]
+                # Bounce off left/right
+                if z[0] <= 0 or z[0] >= WIDTH - 50:
+                    z[2] *= -1
+                # Remove if off bottom
+                if z[1] > HEIGHT:
+                    zigzag_enemies.remove(z)
+                    continue
+                # Draw
+                WIN.blit(ENEMY_ZIGZAG_IMG, (z[0], z[1]))
+                # Collisions with players
+                zigzag_rect = pygame.Rect(z[0], z[1], 50, 40)
+                if zigzag_rect.colliderect(player1_rect):
+                    player1_lives -= 1
+                    zigzag_enemies.remove(z)
+                    if player1_lives <= 0:
+                        game_over = True
+                elif multiplayer and zigzag_rect.colliderect(player2_rect):
+                    player2_lives -= 1
+                    zigzag_enemies.remove(z)
+                    if player2_lives <= 0:
+                        game_over = True
+
+            # Player 1 bullets hit zigzag enemies
+            for b in player1_bullets[:]:
+                hit = False
+                for z in zigzag_enemies[:]:
+                    zigzag_rect = pygame.Rect(z[0], z[1], 50, 40)
+                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                    if bullet_rect.colliderect(zigzag_rect):
+                        zigzag_enemies.remove(z)
+                        player1_bullets.remove(b)
+                        player1_score += 15  # More points than normal enemy
+                        hit = True
+                        break
+                if hit:
+                    continue
+
+            # Player 2 bullets hit zigzag enemies
+            if multiplayer:
+                for b in player2_bullets[:]:
+                    hit = False
+                    for z in zigzag_enemies[:]:
+                        zigzag_rect = pygame.Rect(z[0], z[1], 50, 40)
+                        bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                        if bullet_rect.colliderect(zigzag_rect):
+                            zigzag_enemies.remove(z)
+                            player2_bullets.remove(b)
+                            player2_score += 15
+                            hit = True
+                            break
+                    if hit:
+                        continue
 
         # --- Player Bullets ---
         # --- Player 1 bullets ---
