@@ -66,7 +66,12 @@ def draw_button(text, x, y, w, h, mouse_pos, mouse_click):
     return False
 
 def game_loop(multiplayer=False):
-    score = 0
+    # Individual scores and lives
+    player1_score = 0
+    player1_lives = 3
+    player2_score = 0
+    player2_lives = 3 if multiplayer else 0
+
     # Player 1
     player1_x = WIDTH // 3 - PLAYER_WIDTH // 2 if multiplayer else WIDTH // 2 - PLAYER_WIDTH // 2
     player1_y = HEIGHT - PLAYER_HEIGHT - 20
@@ -78,7 +83,7 @@ def game_loop(multiplayer=False):
         player2_y = HEIGHT - PLAYER_HEIGHT - 20
         player2_rect = pygame.Rect(player2_x, player2_y, PLAYER_WIDTH, PLAYER_HEIGHT)
         player2_bullets = []
-        player2_shoot_cooldown = 0  # Add cooldown for player 2 shooting
+        player2_shoot_cooldown = 0
     meteors = []
     enemies = []
     meteor_timer = 0
@@ -111,13 +116,12 @@ def game_loop(multiplayer=False):
                 player2_x -= PLAYER_SPEED
             if keys[pygame.K_d] and player2_x < WIDTH - PLAYER_WIDTH:
                 player2_x += PLAYER_SPEED
-            # Add cooldown to prevent rapid fire
             if player2_shoot_cooldown > 0:
                 player2_shoot_cooldown -= 1
             if keys[pygame.K_LSHIFT]:
                 if (len(player2_bullets) == 0 or player2_bullets[-1][1] < player2_y - 20) and player2_shoot_cooldown == 0:
                     player2_bullets.append([player2_x + PLAYER_WIDTH // 2 - BULLET_WIDTH // 2, player2_y])
-                    player2_shoot_cooldown = 10  # Adjust for desired fire rate
+                    player2_shoot_cooldown = 10
             player2_rect.x = player2_x
 
         # Meteors from top, angled down
@@ -125,7 +129,7 @@ def game_loop(multiplayer=False):
         if meteor_timer > 30:
             meteor_timer = 0
             mx = random.randint(0, WIDTH - METEOR_WIDTH)
-            angle = random.uniform(math.radians(75), math.radians(105))  # Downward angle with spread
+            angle = random.uniform(math.radians(75), math.radians(105))
             speed = random.uniform(METEOR_SPEED_MIN, METEOR_SPEED_MAX)
             meteors.append([mx, -METEOR_HEIGHT, angle, speed])
 
@@ -134,11 +138,21 @@ def game_loop(multiplayer=False):
             m[1] += m[3] * math.sin(m[2])
             meteor_rect = pygame.Rect(m[0] - METEOR_WIDTH//2, m[1] - METEOR_HEIGHT//2, METEOR_WIDTH, METEOR_HEIGHT)
             draw_meteor(m[0], m[1], m[2])
-            if meteor_rect.colliderect(player1_rect) or (multiplayer and meteor_rect.colliderect(player2_rect)):
-                game_over = True
-            if m[1] > HEIGHT:
+            # Player 1 collision
+            if meteor_rect.colliderect(player1_rect):
+                player1_lives -= 1
                 meteors.remove(m)
-                score += 1
+                if player1_lives <= 0:
+                    game_over = True
+            # Player 2 collision
+            elif multiplayer and meteor_rect.colliderect(player2_rect):
+                player2_lives -= 1
+                meteors.remove(m)
+                if player2_lives <= 0:
+                    game_over = True
+            elif m[1] > HEIGHT:
+                meteors.remove(m)
+                # Award point to player who dodged (optional: split, or none)
 
         # Enemies from top, straight down
         enemy_timer += 1
@@ -151,9 +165,19 @@ def game_loop(multiplayer=False):
             e[1] += ENEMY_SPEED
             enemy_rect = pygame.Rect(e[0], e[1], ENEMY_WIDTH, ENEMY_HEIGHT)
             draw_enemy(e[0], e[1])
-            if enemy_rect.colliderect(player1_rect) or (multiplayer and enemy_rect.colliderect(player2_rect)):
-                game_over = True
-            if e[1] > HEIGHT:
+            # Player 1 collision
+            if enemy_rect.colliderect(player1_rect):
+                player1_lives -= 1
+                enemies.remove(e)
+                if player1_lives <= 0:
+                    game_over = True
+            # Player 2 collision
+            elif multiplayer and enemy_rect.colliderect(player2_rect):
+                player2_lives -= 1
+                enemies.remove(e)
+                if player2_lives <= 0:
+                    game_over = True
+            elif e[1] > HEIGHT:
                 enemies.remove(e)
 
         # Player 1 bullets
@@ -170,7 +194,7 @@ def game_loop(multiplayer=False):
                         enemies.remove(e)
                         if b in player1_bullets:
                             player1_bullets.remove(b)
-                        score += 5
+                        player1_score += 5
 
         # Player 2 bullets (if multiplayer)
         if multiplayer:
@@ -187,25 +211,40 @@ def game_loop(multiplayer=False):
                             enemies.remove(e)
                             if b in player2_bullets:
                                 player2_bullets.remove(b)
-                            score += 5
+                            player2_score += 5
 
         # Draw players
         draw_player(player1_x, player1_y, SHIP_IMG)
         if multiplayer:
             draw_player(player2_x, player2_y, SHIP2_IMG)
 
-        score_text = FONT.render(f"Score: {score}", True, WHITE)
-        WIN.blit(score_text, (10, 10))
+        # Draw lives as ship images at the bottom
+        for i in range(player1_lives):
+            WIN.blit(SHIP_IMG, (10 + i * (PLAYER_WIDTH + 5), HEIGHT - PLAYER_HEIGHT - 5))
+        if multiplayer:
+            for i in range(player2_lives):
+                WIN.blit(SHIP2_IMG, (WIDTH - (i + 1) * (PLAYER_WIDTH + 5), HEIGHT - PLAYER_HEIGHT - 5))
+
+        # Draw scores
+        score1_text = FONT.render(f"P1 Score: {player1_score}", True, WHITE)
+        WIN.blit(score1_text, (10, HEIGHT - PLAYER_HEIGHT - 35))
+        if multiplayer:
+            score2_text = FONT.render(f"P2 Score: {player2_score}", True, WHITE)
+            WIN.blit(score2_text, (WIDTH - score2_text.get_width() - 10, HEIGHT - PLAYER_HEIGHT - 35))
 
         if game_over:
             WIN.blit(BG_IMG, (0, 0))
             over_text = BIG_FONT.render("Game Over!", True, WHITE)
-            score_text = FONT.render(f"Final Score: {score}", True, WHITE)
             WIN.blit(over_text, (WIDTH//2 - over_text.get_width()//2, HEIGHT//2 - 60))
-            WIN.blit(score_text, (WIDTH//2 - score_text.get_width()//2, HEIGHT//2))
+            # Show both scores on game over
+            score1_text = FONT.render(f"P1 Score: {player1_score}", True, WHITE)
+            WIN.blit(score1_text, (WIDTH//2 - score1_text.get_width()//2, HEIGHT//2))
+            if multiplayer:
+                score2_text = FONT.render(f"P2 Score: {player2_score}", True, WHITE)
+                WIN.blit(score2_text, (WIDTH//2 - score2_text.get_width()//2, HEIGHT//2 + 30))
             mouse_pos = pygame.mouse.get_pos()
             mouse_click = pygame.mouse.get_pressed()[0]
-            if draw_button("Restart", WIDTH//2 - 75, HEIGHT//2 + 60, 150, 50, mouse_pos, mouse_click):
+            if draw_button("Restart", WIDTH//2 - 75, HEIGHT//2 + 80, 150, 50, mouse_pos, mouse_click):
                 return "restart"
             pygame.display.flip()
             pygame.time.wait(100)
