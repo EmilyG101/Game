@@ -274,17 +274,46 @@ def game_loop(multiplayer=False):
                     return "restart"
 
         # --- Player Bullets ---
+        # --- Player 1 bullets ---
         for b in player1_bullets[:]:
             b[1] -= BULLET_SPEED
             draw_bullet(b[0], b[1])
             if b[1] < -BULLET_HEIGHT:
                 player1_bullets.remove(b)
+            else:
+                hit = False
+                for e in enemies[:]:
+                    enemy_rect = pygame.Rect(e[0], e[1], ENEMY_WIDTH, ENEMY_HEIGHT)
+                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                    if bullet_rect.colliderect(enemy_rect):
+                        enemies.remove(e)
+                        player1_bullets.remove(b)
+                        player1_score += 5
+                        hit = True
+                        break
+                if hit:
+                    continue
+
+        # --- Player 2 bullets (if multiplayer) ---
         if multiplayer:
             for b in player2_bullets[:]:
                 b[1] -= BULLET_SPEED
                 draw_bullet(b[0], b[1])
                 if b[1] < -BULLET_HEIGHT:
                     player2_bullets.remove(b)
+                else:
+                    hit = False
+                    for e in enemies[:]:
+                        enemy_rect = pygame.Rect(e[0], e[1], ENEMY_WIDTH, ENEMY_HEIGHT)
+                        bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                        if bullet_rect.colliderect(enemy_rect):
+                            enemies.remove(e)
+                            player2_bullets.remove(b)
+                            player2_score += 5
+                            hit = True
+                            break
+                    if hit:
+                        continue
 
         # --- Draw Players ---
         draw_player(player1_x, player1_y, SHIP_IMG)
