@@ -289,6 +289,9 @@ def main_menu():
 def main():
     while True:
         main_menu()
+        # Add a short delay and clear events before showing mode menu
+        pygame.time.wait(200)
+        pygame.event.clear()
         multiplayer = mode_menu()
         result = game_loop(multiplayer)
         if result == "quit":
