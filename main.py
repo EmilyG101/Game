@@ -288,6 +288,11 @@ def game_loop(multiplayer=False):
                     boss_active = False
                     boss_defeated = True
                     level = 2
+
+                    # Clear all enemies and meteors for a fair start to level 2
+                    meteors.clear()
+                    enemies.clear()
+                    zigzag_enemies.clear()
                     continue
 
         # --- Level 2: Meteors, Regular Enemies, Zigzag Enemies ---
