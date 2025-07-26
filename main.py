@@ -400,6 +400,65 @@ def game_loop(multiplayer=False):
                     zigzag_enemies.clear()
                     continue
 
+        # --- Level 2 Boss Logic ---
+        if boss2_active and not boss2_defeated and level == 2:
+            WIN.blit(boss2_img, (boss2_x, boss2_y))
+            boss2_x += boss2_vx * boss2_direction
+            if boss2_x <= 0 or boss2_x >= WIDTH - 120:
+                boss2_direction *= -1
+            boss2_bomb_timer += 1
+            if boss2_bomb_timer > 60:
+                boss2_bomb_timer = 0
+                boss2_bombs.append([boss2_x + 60, boss2_y + 60, 6])
+            for bomb in boss2_bombs[:]:
+                bomb[1] += bomb[2]
+                pygame.draw.rect(WIN, (255, 200, 0), (bomb[0], bomb[1], 16, 24))
+                if pygame.Rect(bomb[0], bomb[1], 16, 24).colliderect(player1_rect):
+                    player1_lives -= 1
+                    boss2_bombs.remove(bomb)
+                    if player1_lives <= 0:
+                        game_over = True
+                elif multiplayer and pygame.Rect(bomb[0], bomb[1], 16, 24).colliderect(player2_rect):
+                    player2_lives -= 1
+                    boss2_bombs.remove(bomb)
+                    if player2_lives <= 0:
+                        game_over = True
+                elif bomb[1] > HEIGHT:
+                    boss2_bombs.remove(bomb)
+            # Player bullets hit boss2
+            for b in player1_bullets[:]:
+                boss2_rect = pygame.Rect(boss2_x, boss2_y, 120, 60)
+                bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                if bullet_rect.colliderect(boss2_rect):
+                    player1_bullets.remove(b)
+                    boss2_health -= 1
+                    player1_score += 10
+                    break
+            if multiplayer:
+                for b in player2_bullets[:]:
+                    boss2_rect = pygame.Rect(boss2_x, boss2_y, 120, 60)
+                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                    if bullet_rect.colliderect(boss2_rect):
+                        player2_bullets.remove(b)
+                        boss2_health -= 1
+                        player2_score += 10
+                        break
+            if boss2_health <= 0:
+                WIN.blit(LEVEL2_BG, (0, 0))
+                win_text = BIG_FONT.render("Boss Defeated!", True, (255, 50, 50))
+                WIN.blit(win_text, (WIDTH//2 - win_text.get_width()//2, HEIGHT//2 - 60))
+                pygame.display.flip()
+                pygame.time.wait(2500)
+                boss2_active = False
+                boss2_defeated = True
+                level = 3
+                meteors.clear()
+                enemies.clear()
+                zigzag_enemies.clear()
+                boss2_bombs.clear()
+                level_score = 0
+                continue
+
         # --- Level 2: Meteors, Regular Enemies, Zigzag Enemies ---
         if not boss2_active and not boss2_defeated and level == 2:
             meteor_timer += 1
