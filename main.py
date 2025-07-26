@@ -120,8 +120,11 @@ def game_loop(multiplayer=False):
     boss_burst_pause = 0
     boss_defeated = False
 
-    # Level 2 boss variables
+    # Level 2 boss variables (UPDATED)
     boss2_active = False
+    boss2_intro = False
+    boss2_intro_timer = 0
+    boss2_name = "The Iron Bomber"
     boss2_health = 40
     boss2_img = BOSS2_IMG
     boss2_bombs = []
@@ -133,17 +136,19 @@ def game_loop(multiplayer=False):
     boss2_direction = 1 if boss2_x == 0 else -1
     boss2_defeated = False
 
-    # Level 3 variables
+    # Level 3 variables (UPDATED)
     shooter_enemies = [
         {'x': 0, 'y': 100, 'dir': 1, 'shoot_timer': 0, 'burst_count': 0, 'respawn_timer': 0, 'alive': True},
         {'x': WIDTH-50, 'y': 100, 'dir': -1, 'shoot_timer': 0, 'burst_count': 0, 'respawn_timer': 0, 'alive': True}
     ]
     boss3_active = False
+    boss3_intro = False
+    boss3_intro_timer = 0
     boss3_health = 50
     boss3_img = BOSS3_IMG
-    boss3_x = random.choice([0, WIDTH-100])
+    boss3_x = random.randint(0, WIDTH-100)
     boss3_y = -80
-    boss3_vy = 10
+    boss3_vy = 5  # slower speed
     boss3_defeated = False
     boss3_name = "The Charger"
     level_score = 0
@@ -176,7 +181,6 @@ def game_loop(multiplayer=False):
 
     while run:
         clock.tick(60)
-        # Background switch
         if level == 2:
             WIN.blit(LEVEL2_BG, (0, 0))
         elif level == 3:
@@ -202,8 +206,8 @@ def game_loop(multiplayer=False):
         if not boss2_active and not boss2_defeated and level == 2:
             if (not multiplayer and level_score >= 50) or (multiplayer and level_score >= 50):
                 boss2_active = True
-                boss2_bomb_timer = 0
-                boss2_bomb_drops = 0
+                boss2_intro = True
+                boss2_intro_timer = 120
                 boss2_health = 40
                 boss2_y = random.randint(0, HEIGHT//2)
                 boss2_x = random.choice([0, WIDTH-120])
@@ -212,10 +216,12 @@ def game_loop(multiplayer=False):
         if not boss3_active and not boss3_defeated and level == 3:
             if (not multiplayer and level3_score >= 50) or (multiplayer and level3_score >= 50):
                 boss3_active = True
+                boss3_intro = True
+                boss3_intro_timer = 120
                 boss3_health = 50
-                boss3_x = random.choice([0, WIDTH-100])
+                boss3_x = random.randint(0, WIDTH-100)
                 boss3_y = -80
-                boss3_vy = 10
+                boss3_vy = 5
 
         # --- Player Controls ---
         keys = pygame.key.get_pressed()
@@ -361,7 +367,7 @@ def game_loop(multiplayer=False):
                 if boss_health <= 0:
                     WIN.blit(BG_IMG, (0, 0))
                     win_text = BIG_FONT.render("Boss Defeated!", True, (255, 50, 50))
-                    WIN.blit(win_text, (WIDTH//2 - win_text.get_width()//2, HEIGHT//2 - 60))
+                    WIN.blit(win_text, (WIDTH//2 - win_text.get_width()//2, HEIGHT//2))
                     score1_text = FONT.render(f"P1 Score: {player1_score}", True, WHITE)
                     WIN.blit(score1_text, (WIDTH//2 - score1_text.get_width()//2, HEIGHT//2))
                     if multiplayer:
@@ -463,9 +469,18 @@ def game_loop(multiplayer=False):
                     if player2_lives <= 0:
                         game_over = True
 
-        # --- Level 2 Boss Logic ---
+        # --- Level 2 Boss Logic with Intro (UPDATED) ---
         if boss2_active and not boss2_defeated and level == 2:
-            WIN.blit(boss2_img, (boss2_x, boss2_y))
+            if boss2_intro:
+                WIN.blit(LEVEL2_BG, (0, 0))
+                WIN.blit(boss2_img, (boss2_x, boss2_y))
+                name_text = BIG_FONT.render(boss2_name, True, (255, 200, 0))
+                WIN.blit(name_text, (WIDTH//2 - name_text.get_width()//2, HEIGHT//2 - 60))
+                boss2_intro_timer -= 1
+                pygame.display.flip()
+                if boss2_intro_timer <= 0:
+                    boss2_intro = False
+                continue
             boss2_x += boss2_vx * boss2_direction
             if boss2_x <= 0 or boss2_x >= WIDTH - 120:
                 boss2_direction *= -1
@@ -692,29 +707,36 @@ def game_loop(multiplayer=False):
                     if hit:
                         continue
 
-        # --- Level 3 Boss Logic ---
+        # --- Level 3 Boss Logic with Intro and better random spawn (UPDATED) ---
         if boss3_active and not boss3_defeated and level == 3:
+            if boss3_intro:
+                WIN.blit(LEVEL3_BG, (0, 0))
+                WIN.blit(boss3_img, (boss3_x, boss3_y))
+                name_text = BIG_FONT.render(boss3_name, True, (255, 50, 255))
+                WIN.blit(name_text, (WIDTH//2 - name_text.get_width()//2, HEIGHT//2 - 60))
+                boss3_intro_timer -= 1
+                pygame.display.flip()
+                if boss3_intro_timer <= 0:
+                    boss3_intro = False
+                continue
             WIN.blit(boss3_img, (boss3_x, boss3_y))
             boss3_y += boss3_vy
-            # If boss leaves the screen, respawn at new random left/right position at top
             if boss3_y > HEIGHT:
-                boss3_x = random.choice([0, WIDTH-100])
+                boss3_x = random.randint(0, WIDTH-100)
                 boss3_y = -80
             boss3_rect = pygame.Rect(boss3_x, boss3_y, 100, 80)
-            # Collision with player
             if boss3_rect.colliderect(player1_rect):
                 player1_lives -= 1
-                boss3_x = random.choice([0, WIDTH-100])
+                boss3_x = random.randint(0, WIDTH-100)
                 boss3_y = -80
                 if player1_lives <= 0:
                     game_over = True
             if multiplayer and boss3_rect.colliderect(player2_rect):
                 player2_lives -= 1
-                boss3_x = random.choice([0, WIDTH-100])
+                boss3_x = random.randint(0, WIDTH-100)
                 boss3_y = -80
                 if player2_lives <= 0:
                     game_over = True
-            # Player bullets hit boss3
             for b in player1_bullets[:]:
                 bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
                 if bullet_rect.colliderect(boss3_rect):
