@@ -994,16 +994,16 @@ def game_loop(multiplayer=False):
                 if greg_x <= 0 or greg_x >= WIDTH - 120:
                     greg_vx *= -1
 
-                # Fire a spread of slow particles every 40 frames
+                # Fire a spread of slow particles every 70 frames (was 40)
                 greg_particle_timer += 1
-                if greg_particle_timer >= 40:
+                if greg_particle_timer >= 70:
                     greg_particle_timer = 0
                     num_particles = 9
                     spread = math.radians(80)
                     base_angle = math.pi / 2  # straight down
                     for i in range(num_particles):
                         angle = base_angle - spread/2 + i * (spread/(num_particles-1))
-                        speed = 3
+                        speed = 2  # slower particles (was 3)
                         greg_particles.append([greg_x + 60, greg_y + 60, angle, speed])
 
                 # Move and draw Greg's particles
