@@ -134,16 +134,16 @@ def game_loop(multiplayer=False):
     boss2_defeated = False
 
     # Level 3 variables
-    shooter_enemies = []
-    shooter_respawn_timer = 0
+    shooter_enemies = [
+        {'x': 0, 'y': 100, 'dir': 1, 'shoot_timer': 0, 'burst_count': 0, 'respawn_timer': 0, 'alive': True},
+        {'x': WIDTH-50, 'y': 100, 'dir': -1, 'shoot_timer': 0, 'burst_count': 0, 'respawn_timer': 0, 'alive': True}
+    ]
     boss3_active = False
     boss3_health = 50
     boss3_img = BOSS3_IMG
     boss3_x = random.choice([0, WIDTH-100])
     boss3_y = -80
-    boss3_vy = 5
-    boss3_bullets = []
-    boss3_shoot_timer = 0
+    boss3_vy = 10
     boss3_defeated = False
     boss3_name = "The Charger"
     level_score = 0
@@ -213,32 +213,9 @@ def game_loop(multiplayer=False):
             if (not multiplayer and level3_score >= 50) or (multiplayer and level3_score >= 50):
                 boss3_active = True
                 boss3_health = 50
-                boss3_x = random.randint(0, WIDTH-100)
+                boss3_x = random.choice([0, WIDTH-100])
                 boss3_y = -80
-                boss3_vy = 5
-                boss3_bullets = []
-                boss3_shoot_timer = 0
-
-        if not greg_active and not greg_defeated and level == 4:
-            if (not multiplayer and level4_score >= 50) or (multiplayer and level4_score >= 50):
-                greg_active = True
-                greg_health = 60
-                greg_x = 0
-                greg_y = 60
-                greg_vx = 10
-                greg_particles = []
-                greg_particle_timer = 0
-
-        if not overlord_active and not overlord_defeated and level == 5:
-            if (not multiplayer and level5_score >= 50) or (multiplayer and level5_score >= 50):
-                overlord_active = True
-                overlord_health = 120
-                overlord_x = WIDTH // 2 - 90
-                overlord_y = 40
-                overlord_vx = 6
-                overlord_bullets = []
-                overlord_homing = []
-                overlord_shoot_timer = 0
+                boss3_vy = 10
 
         # --- Player Controls ---
         keys = pygame.key.get_pressed()
@@ -264,8 +241,9 @@ def game_loop(multiplayer=False):
                     player2_shoot_cooldown = 10
             player2_rect.x = player2_x
 
-        # --- Level 1: Normal Enemies and Meteors ---
-        if not boss_active and not boss_defeated and level == 1:
+        # --- Level 3: All Enemies (before boss3_active) ---
+        if not boss3_active and not boss3_defeated and level == 3:
+            # Meteors
             meteor_timer += 1
             if meteor_timer > 30:
                 meteor_timer = 0
@@ -292,6 +270,7 @@ def game_loop(multiplayer=False):
                 elif m[1] > HEIGHT:
                     meteors.remove(m)
 
+            # Regular enemies
             enemy_timer += 1
             if enemy_timer > 90:
                 enemy_timer = 0
@@ -315,90 +294,176 @@ def game_loop(multiplayer=False):
                 elif e[1] > HEIGHT:
                     enemies.remove(e)
 
-        # --- Boss 1 Logic ---
-        if boss_active:
-            # Dramatic entrance
-            if boss_intro:
-                boss_y += boss_speed
-                if boss_y >= 80:
-                    boss_y = 80
-                    boss_intro_timer -= 1
-                    name_text = BIG_FONT.render(boss_name, True, (255, 50, 50))
-                    WIN.blit(name_text, (WIDTH//2 - name_text.get_width()//2, boss_y - 60))
-                    if boss_intro_timer <= 0:
-                        boss_intro = False
+            # Zigzag enemies
+            zigzag_spawn_timer += 1
+            if zigzag_spawn_timer > 60:
+                zigzag_spawn_timer = 0
+                from_left = random.choice([True, False])
+                if from_left:
+                    x = 0
+                    vx = 5
                 else:
-                    name_text = BIG_FONT.render(boss_name, True, (255, 50, 50))
-                    WIN.blit(name_text, (WIDTH//2 - name_text.get_width()//2, boss_y - 60))
-            else:
-                for i in range(-1, 2):
-                    WIN.blit(BOSSSHIP_IMG, (boss_x + i*60 - BOSSSHIP_IMG.get_width()//2, boss_y))
-                if boss_burst_pause > 0:
-                    boss_burst_pause -= 1
+                    x = WIDTH - 50
+                    vx = -5
+                y = random.randint(40, HEIGHT // 2 - 60)
+                vy = random.choice([3, 4])
+                zigzag_enemies.append([x, y, vx, vy])
+
+            for z in zigzag_enemies[:]:
+                z[0] += z[2]
+                z[1] += z[3]
+                if z[0] <= 0 or z[0] >= WIDTH - 50:
+                    z[2] *= -1
+                if z[1] > HEIGHT:
+                    zigzag_enemies.remove(z)
+                    continue
+                WIN.blit(ENEMY_ZIGZAG_IMG, (z[0], z[1]))
+                zigzag_rect = pygame.Rect(z[0], z[1], 50, 40)
+                if zigzag_rect.colliderect(player1_rect):
+                    player1_lives -= 1
+                    zigzag_enemies.remove(z)
+                    if player1_lives <= 0:
+                        game_over = True
+                elif multiplayer and zigzag_rect.colliderect(player2_rect):
+                    player2_lives -= 1
+                    zigzag_enemies.remove(z)
+                    if player2_lives <= 0:
+                        game_over = True
+
+            # Shooter enemies with individual respawn timers and shooting
+            for s in shooter_enemies:
+                if not s['alive']:
+                    s['respawn_timer'] -= 1
+                    if s['respawn_timer'] <= 0:
+                        s['x'] = 0 if s['dir'] == 1 else WIDTH-50
+                        s['y'] = 100
+                        s['shoot_timer'] = 0
+                        s['burst_count'] = 0
+                        s['alive'] = True
                 else:
-                    boss_fire_timer += 1
-                    if boss_fire_timer > 15:
-                        boss_fire_timer = 0
-                        boss_burst_count += 1
-                        for i in range(-1, 2):
-                            boss_bullets.append([boss_x + i*60, boss_y + BOSSSHIP_IMG.get_height(), 7])
-                        if boss_burst_count >= 3:
-                            boss_burst_pause = 60
-                            boss_burst_count = 0
-                boss_x += random.choice([-1, 0, 1]) * 2
-                boss_x = max(90, min(WIDTH-90, boss_x))
-                for b in boss_bullets[:]:
-                    b[1] += b[2]
-                    pygame.draw.rect(WIN, (255, 50, 50), (b[0], b[1], 12, 18))
-                    if pygame.Rect(b[0], b[1], 12, 18).colliderect(player1_rect):
+                    s['x'] += s['dir']*2
+                    if s['x'] < 0 or s['x'] > WIDTH-50:
+                        s['dir'] *= -1
+                    WIN.blit(ENEMY_SHOOTER_IMG, (s['x'], s['y']))
+                    # Shooting logic
+                    s['shoot_timer'] += 1
+                    if s['shoot_timer'] > 30 and s['burst_count'] < 3:
+                        s['shoot_timer'] = 0
+                        s['burst_count'] += 1
+                        for px, py in [(player1_x, player1_y)] + ([(player2_x, player2_y)] if multiplayer else []):
+                            dx = (px + PLAYER_WIDTH//2) - (s['x'] + 25)
+                            dy = (py + PLAYER_HEIGHT//2) - (s['y'] + 40)
+                            length = math.hypot(dx, dy)
+                            if length == 0: length = 1
+                            vx = dx / length * 7
+                            vy = dy / length * 7
+                            meteors.append([s['x']+25, s['y']+40, math.atan2(vy, vx), 8])
+                    if s['burst_count'] >= 3 and s['shoot_timer'] > 60:
+                        s['burst_count'] = 0
+                        s['shoot_timer'] = 0
+                    # Collision
+                    shooter_rect = pygame.Rect(s['x'], s['y'], 50, 40)
+                    if shooter_rect.colliderect(player1_rect):
                         player1_lives -= 1
-                        boss_bullets.remove(b)
+                        s['alive'] = False
+                        s['respawn_timer'] = 180
                         if player1_lives <= 0:
                             game_over = True
-                    elif multiplayer and pygame.Rect(b[0], b[1], 12, 18).colliderect(player2_rect):
+                    elif multiplayer and shooter_rect.colliderect(player2_rect):
                         player2_lives -= 1
-                        boss_bullets.remove(b)
+                        s['alive'] = False
+                        s['respawn_timer'] = 180
                         if player2_lives <= 0:
                             game_over = True
-                    elif b[1] > HEIGHT:
-                        boss_bullets.remove(b)
-                for b in player1_bullets[:]:
-                    for i in range(-1, 2):
-                        boss_rect = pygame.Rect(boss_x + i*60 - BOSSSHIP_IMG.get_width()//2, boss_y, BOSSSHIP_IMG.get_width(), BOSSSHIP_IMG.get_height())
+
+            # Player bullets hit shooter enemies
+            for b in player1_bullets[:]:
+                hit = False
+                for s in shooter_enemies:
+                    if s['alive']:
+                        shooter_rect = pygame.Rect(s['x'], s['y'], 50, 40)
                         bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
-                        if bullet_rect.colliderect(boss_rect):
+                        if bullet_rect.colliderect(shooter_rect):
+                            s['alive'] = False
+                            s['respawn_timer'] = 180
                             player1_bullets.remove(b)
-                            boss_health -= 1
-                            player1_score += 10
+                            player1_score += 15
+                            level3_score += 15
+                            hit = True
                             break
-                if multiplayer:
-                    for b in player2_bullets[:]:
-                        for i in range(-1, 2):
-                            boss_rect = pygame.Rect(boss_x + i*60 - BOSSSHIP_IMG.get_width()//2, boss_y, BOSSSHIP_IMG.get_width(), BOSSSHIP_IMG.get_height())
-                            bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
-                            if bullet_rect.colliderect(boss_rect):
-                                player2_bullets.remove(b)
-                                boss_health -= 1
-                                player2_score += 10
-                                break
-                if boss_health <= 0:
-                    WIN.blit(BG_IMG, (0, 0))
-                    win_text = BIG_FONT.render("Boss Defeated!", True, (255, 50, 50))
-                    WIN.blit(win_text, (WIDTH//2 - win_text.get_width()//2, HEIGHT//2 - 60))
-                    score1_text = FONT.render(f"P1 Score: {player1_score}", True, WHITE)
-                    WIN.blit(score1_text, (WIDTH//2 - score1_text.get_width()//2, HEIGHT//2))
-                    if multiplayer:
-                        score2_text = FONT.render(f"P2 Score: {player2_score}", True, WHITE)
-                        WIN.blit(score2_text, (WIDTH//2 - score2_text.get_width()//2, HEIGHT//2 + 30))
-                    pygame.display.flip()
-                    pygame.time.wait(2500)
-                    boss_active = False
-                    boss_defeated = True
-                    level = 2
-                    meteors.clear()
-                    enemies.clear()
-                    zigzag_enemies.clear()
+                if hit:
                     continue
+            if multiplayer:
+                for b in player2_bullets[:]:
+                    hit = False
+                    for s in shooter_enemies:
+                        if s['alive']:
+                            shooter_rect = pygame.Rect(s['x'], s['y'], 50, 40)
+                            bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                            if bullet_rect.colliderect(shooter_rect):
+                                s['alive'] = False
+                                s['respawn_timer'] = 180
+                                player2_bullets.remove(b)
+                                player2_score += 15
+                                level3_score += 15
+                                hit = True
+                                break
+                    if hit:
+                        continue
+
+        # --- Level 3 Boss Logic ---
+        if boss3_active and not boss3_defeated and level == 3:
+            WIN.blit(boss3_img, (boss3_x, boss3_y))
+            boss3_y += boss3_vy
+            # If boss leaves the screen, respawn at new random left/right position at top
+            if boss3_y > HEIGHT:
+                boss3_x = random.choice([0, WIDTH-100])
+                boss3_y = -80
+            boss3_rect = pygame.Rect(boss3_x, boss3_y, 100, 80)
+            # Collision with player
+            if boss3_rect.colliderect(player1_rect):
+                player1_lives -= 1
+                boss3_x = random.choice([0, WIDTH-100])
+                boss3_y = -80
+                if player1_lives <= 0:
+                    game_over = True
+            if multiplayer and boss3_rect.colliderect(player2_rect):
+                player2_lives -= 1
+                boss3_x = random.choice([0, WIDTH-100])
+                boss3_y = -80
+                if player2_lives <= 0:
+                    game_over = True
+            # Player bullets hit boss3
+            for b in player1_bullets[:]:
+                bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                if bullet_rect.colliderect(boss3_rect):
+                    player1_bullets.remove(b)
+                    boss3_health -= 1
+                    player1_score += 10
+                    break
+            if multiplayer:
+                for b in player2_bullets[:]:
+                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                    if bullet_rect.colliderect(boss3_rect):
+                        player2_bullets.remove(b)
+                        boss3_health -= 1
+                        player2_score += 10
+                        break
+            if boss3_health <= 0:
+                WIN.blit(LEVEL3_BG, (0, 0))
+                win_text = BIG_FONT.render("Boss Defeated!", True, (255, 50, 50))
+                WIN.blit(win_text, (WIDTH//2 - win_text.get_width()//2, HEIGHT//2 - 60))
+                pygame.display.flip()
+                pygame.time.wait(2500)
+                boss3_active = False
+                boss3_defeated = True
+                level = 4
+                meteors.clear()
+                enemies.clear()
+                zigzag_enemies.clear()
+                shooter_enemies.clear()
+                level3_score = 0
+                continue
 
         # --- Level 2: Meteors, Regular Enemies, Zigzag Enemies ---
         if not boss2_active and not boss2_defeated and level == 2:
@@ -543,154 +608,6 @@ def game_loop(multiplayer=False):
                 zigzag_enemies.clear()
                 boss2_bombs.clear()
                 level_score = 0
-                continue
-
-        # --- Level 3: Shooter Enemies ---
-        if not boss3_active and not boss3_defeated and level == 3:
-            # Only two shooter ships at a time, one on each side
-            if len(shooter_enemies) < 2 and shooter_respawn_timer <= 0:
-                shooter_enemies.clear()
-                shooter_enemies.append([0, 100, 1, 0, 0])  # x, y, direction, shoot_timer, burst_count
-                shooter_enemies.append([WIDTH-50, 100, -1, 0, 0])
-                shooter_respawn_timer = 0
-            else:
-                shooter_respawn_timer = max(0, shooter_respawn_timer - 1)
-
-            for s in shooter_enemies[:]:
-                s[0] += s[2]*2
-                if s[0] < 0 or s[0] > WIDTH-50:
-                    s[2] *= -1
-                WIN.blit(ENEMY_SHOOTER_IMG, (s[0], s[1]))
-                # Shooting logic
-                s[3] += 1
-                if s[3] > 30 and s[4] < 3:
-                    s[3] = 0
-                    s[4] += 1
-                    # Shoot 3 bullets at player(s)
-                    for px, py in [(player1_x, player1_y)] + ([(player2_x, player2_y)] if multiplayer else []):
-                        dx = (px + PLAYER_WIDTH//2) - (s[0] + 25)
-                        dy = (py + PLAYER_HEIGHT//2) - (s[1] + 40)
-                        length = math.hypot(dx, dy)
-                        if length == 0: length = 1
-                        vx = dx / length * 7
-                        vy = dy / length * 7
-                        meteors.append([s[0]+25, s[1]+40, math.atan2(vy, vx), 8])
-                if s[4] >= 3 and s[3] > 60:
-                    s[4] = 0
-                    s[3] = 0
-                # Collision
-                shooter_rect = pygame.Rect(s[0], s[1], 50, 40)
-                if shooter_rect.colliderect(player1_rect):
-                    player1_lives -= 1
-                    shooter_enemies.remove(s)
-                    shooter_respawn_timer = 180
-                    if player1_lives <= 0:
-                        game_over = True
-                elif multiplayer and shooter_rect.colliderect(player2_rect):
-                    player2_lives -= 1
-                    shooter_enemies.remove(s)
-                    shooter_respawn_timer = 180
-                    if player2_lives <= 0:
-                        game_over = True
-
-            # Player bullets hit shooter enemies
-            for b in player1_bullets[:]:
-                hit = False
-                for s in shooter_enemies[:]:
-                    shooter_rect = pygame.Rect(s[0], s[1], 50, 40)
-                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
-                    if bullet_rect.colliderect(shooter_rect):
-                        shooter_enemies.remove(s)
-                        player1_bullets.remove(b)
-                        player1_score += 15
-                        level3_score += 15
-                        shooter_respawn_timer = 180
-                        hit = True
-                        break
-                if hit:
-                    continue
-            if multiplayer:
-                for b in player2_bullets[:]:
-                    hit = False
-                    for s in shooter_enemies[:]:
-                        shooter_rect = pygame.Rect(s[0], s[1], 50, 40)
-                        bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
-                        if bullet_rect.colliderect(shooter_rect):
-                            shooter_enemies.remove(s)
-                            player2_bullets.remove(b)
-                            player2_score += 15
-                            level3_score += 15
-                            shooter_respawn_timer = 180
-                            hit = True
-                            break
-                    if hit:
-                        continue
-
-        # --- Level 3 Boss Logic ---
-        if boss3_active and not boss3_defeated and level == 3:
-            WIN.blit(boss3_img, (boss3_x, boss3_y))
-            boss3_y += boss3_vy
-            if boss3_y < 60:
-                boss3_vy = abs(boss3_vy)
-            elif boss3_y > HEIGHT // 2:
-                boss3_vy = -abs(boss3_vy)
-            boss3_shoot_timer += 1
-            if boss3_shoot_timer > 30:
-                boss3_shoot_timer = 0
-                # Shoot 3 bullets in a spread
-                for angle in [-0.3, 0, 0.3]:
-                    vx = 8 * math.sin(angle)
-                    vy = 8 * math.cos(angle)
-                    boss3_bullets.append([boss3_x + 50, boss3_y + 80, vx, vy])
-            for b in boss3_bullets[:]:
-                b[0] += b[2]
-                b[1] += b[3]
-                pygame.draw.rect(WIN, (255, 0, 255), (b[0], b[1], 14, 20))
-                if pygame.Rect(b[0], b[1], 14, 20).colliderect(player1_rect):
-                    player1_lives -= 1
-                    boss3_bullets.remove(b)
-                    if player1_lives <= 0:
-                        game_over = True
-                elif multiplayer and pygame.Rect(b[0], b[1], 14, 20).colliderect(player2_rect):
-                    player2_lives -= 1
-                    boss3_bullets.remove(b)
-                    if player2_lives <= 0:
-                        game_over = True
-                elif b[1] > HEIGHT or b[0] < 0 or b[0] > WIDTH:
-                    boss3_bullets.remove(b)
-            # Player bullets hit boss3
-            for b in player1_bullets[:]:
-                boss3_rect = pygame.Rect(boss3_x, boss3_y, 100, 80)
-                bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
-                if bullet_rect.colliderect(boss3_rect):
-                    player1_bullets.remove(b)
-                    boss3_health -= 1
-                    player1_score += 10
-                    break
-            if multiplayer:
-                for b in player2_bullets[:]:
-                    boss3_rect = pygame.Rect(boss3_x, boss3_y, 100, 80)
-                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
-                    if bullet_rect.colliderect(boss3_rect):
-                        player2_bullets.remove(b)
-                        boss3_health -= 1
-                        player2_score += 10
-                        break
-            if boss3_health <= 0:
-                WIN.blit(LEVEL3_BG, (0, 0))
-                win_text = BIG_FONT.render("Boss Defeated!", True, (255, 50, 50))
-                WIN.blit(win_text, (WIDTH//2 - win_text.get_width()//2, HEIGHT//2 - 60))
-                pygame.display.flip()
-                pygame.time.wait(2500)
-                boss3_active = False
-                boss3_defeated = True
-                level = 4
-                meteors.clear()
-                enemies.clear()
-                zigzag_enemies.clear()
-                shooter_enemies.clear()
-                boss3_bullets.clear()
-                level3_score = 0
                 continue
 
         # --- Level 4: Bomber Enemy ---
@@ -1000,7 +917,7 @@ def game_loop(multiplayer=False):
                             hit = True
                             break
 
-        # --- Draw Players ---
+        # --- Draw Players, Lives, Scores, Game Over, etc. ---
         draw_player(player1_x, player1_y, SHIP_IMG)
         if multiplayer:
             draw_player(player2_x, player2_y, SHIP2_IMG)
