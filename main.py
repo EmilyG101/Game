@@ -979,7 +979,7 @@ def game_loop(multiplayer=False):
             greg_particles.clear()
             greg_particle_timer = 0
 
-        # --- Greg boss logic (spread slow particles, must dodge) ---
+        # --- Greg boss logic (spread slow, small, wide particles, must dodge) ---
         if greg_active and not greg_defeated:
             if greg_intro:
                 WIN.blit(LEVEL4_BG, (0, 0))
@@ -994,24 +994,24 @@ def game_loop(multiplayer=False):
                 if greg_x <= 0 or greg_x >= WIDTH - 120:
                     greg_vx *= -1
 
-                # Fire a spread of slow particles every 70 frames (was 40)
+                # Fire a spread of slow, small particles every 70 frames
                 greg_particle_timer += 1
                 if greg_particle_timer >= 70:
                     greg_particle_timer = 0
                     num_particles = 9
-                    spread = math.radians(80)
+                    spread = math.radians(120)  # wider spread
                     base_angle = math.pi / 2  # straight down
                     for i in range(num_particles):
                         angle = base_angle - spread/2 + i * (spread/(num_particles-1))
-                        speed = 2  # slower particles (was 3)
+                        speed = 2
                         greg_particles.append([greg_x + 60, greg_y + 60, angle, speed])
 
-                # Move and draw Greg's particles
+                # Move and draw Greg's particles (smaller size)
                 for p in greg_particles[:]:
                     p[0] += p[3] * math.cos(p[2])
                     p[1] += p[3] * math.sin(p[2])
-                    pygame.draw.circle(WIN, (50, 255, 50), (int(p[0]), int(p[1])), 10)
-                    particle_rect = pygame.Rect(p[0]-10, p[1]-10, 20, 20)
+                    pygame.draw.circle(WIN, (50, 255, 50), (int(p[0]), int(p[1])), 6)
+                    particle_rect = pygame.Rect(p[0]-6, p[1]-6, 12, 12)
                     if particle_rect.colliderect(player1_rect):
                         player1_lives -= 1
                         greg_particles.remove(p)
@@ -1022,7 +1022,7 @@ def game_loop(multiplayer=False):
                         greg_particles.remove(p)
                         if player2_lives <= 0:
                             game_over = True
-                    elif p[1] > HEIGHT or p[0] < -20 or p[0] > WIDTH+20:
+                    elif p[1] > HEIGHT or p[0] < -12 or p[0] > WIDTH+12:
                         greg_particles.remove(p)
 
                 # Greg collision with player
