@@ -467,7 +467,6 @@ def game_loop(multiplayer=False):
 
         # --- Level 2: Meteors, Regular Enemies, Zigzag Enemies ---
         if not boss2_active and not boss2_defeated and level == 2:
-            # Meteors
             meteor_timer += 1
             if meteor_timer > 30:
                 meteor_timer = 0
@@ -529,6 +528,7 @@ def game_loop(multiplayer=False):
                 else:
                     x = WIDTH - 50
                     vx = -5
+                # Spawn only in upper half, not too low
                 y = random.randint(40, HEIGHT // 2 - 60)
                 vy = random.choice([3, 4])
                 zigzag_enemies.append([x, y, vx, vy])
@@ -1014,14 +1014,96 @@ def game_loop(multiplayer=False):
         # --- Player Bullets ---
         for b in player1_bullets[:]:
             b[1] -= BULLET_SPEED
-            if b[1] < 0:
+            draw_bullet(b[0], b[1])
+            if b[1] < -BULLET_HEIGHT:
                 player1_bullets.remove(b)
+            else:
+                hit = False
+                # Regular enemies
+                for e in enemies[:]:
+                    enemy_rect = pygame.Rect(e[0], e[1], ENEMY_WIDTH, ENEMY_HEIGHT)
+                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                    if bullet_rect.colliderect(enemy_rect):
+                        enemies.remove(e)
+                        player1_bullets.remove(b)
+                        player1_score += 5
+                        if level == 2:
+                            level_score += 5
+                        if level == 3:
+                            level3_score += 5
+                        if level == 4:
+                            level4_score += 5
+                        if level == 5:
+                            level5_score += 5
+                        hit = True
+                        break
+                if hit:
+                    continue
+                # Zigzag enemies
+                for z in zigzag_enemies[:]:
+                    zigzag_rect = pygame.Rect(z[0], z[1], 50, 40)
+                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                    if bullet_rect.colliderect(zigzag_rect):
+                        zigzag_enemies.remove(z)
+                        player1_bullets.remove(b)
+                        player1_score += 10
+                        if level == 2:
+                            level_score += 10
+                        if level == 3:
+                            level3_score += 10
+                        if level == 4:
+                            level4_score += 10
+                        if level == 5:
+                            level5_score += 10
+                        hit = True
+                        break
 
         if multiplayer:
             for b in player2_bullets[:]:
                 b[1] -= BULLET_SPEED
-                if b[1] < 0:
+                draw_bullet(b[0], b[1])
+                if b[1] < -BULLET_HEIGHT:
                     player2_bullets.remove(b)
+                else:
+                    hit = False
+                    # Regular enemies
+                    for e in enemies[:]:
+                        enemy_rect = pygame.Rect(e[0], e[1], ENEMY_WIDTH, ENEMY_HEIGHT)
+                        bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                        if bullet_rect.colliderect(enemy_rect):
+                            enemies.remove(e)
+                            player2_bullets.remove(b)
+                            player2_score += 5
+                            if level == 2:
+                                level_score += 5
+                            if level == 3:
+                                level3_score += 5
+                            if level == 4:
+                                level4_score += 5
+                            if level == 5:
+                                level5_score += 5
+                            hit = True
+                            break
+                    if hit:
+                        continue
+                    # Zigzag enemies
+                    for z in zigzag_enemies[:]:
+                        zigzag_rect = pygame.Rect(z[0], z[1], 50, 40)
+                        bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                        if bullet_rect.colliderect(zigzag_rect):
+                            zigzag_enemies.remove(z)
+                            player2_bullets.remove(b)
+                            player2_score += 10
+                            if level == 2:
+                                level_score += 10
+                            if level == 3:
+                                level3_score += 10
+                            if level == 4:
+                                level4_score += 10
+                            if level == 5:
+                                level5_score += 10
+                            hit = True
+                            break
 
         # --- Draw Players ---
         draw_player(player1_x, player1_y, SHIP_IMG)
