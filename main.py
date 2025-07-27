@@ -994,9 +994,9 @@ def game_loop(multiplayer=False):
                 if greg_x <= 0 or greg_x >= WIDTH - 120:
                     greg_vx *= -1
 
-                # Fire a spread of slow, small particles every 70 frames
+                # Fire a spread of slow, small particles every 120 frames (was 70)
                 greg_particle_timer += 1
-                if greg_particle_timer >= 70:
+                if greg_particle_timer >= 120:
                     greg_particle_timer = 0
                     num_particles = 9
                     spread = math.radians(120)  # wider spread
@@ -1065,6 +1065,250 @@ def game_loop(multiplayer=False):
                     greg_active = False
                     greg_defeated = True
                     level = 5
+                    overlord_active = True  # Activate final boss
+                    meteors.clear()
+                    enemies.clear()
+                    zigzag_enemies.clear()
+                    shooter_enemies.clear()
+                    bomber_enemy = None
+                    bomber_bombs.clear()
+                    greg_particles.clear()
+                    level4_score = 0
+                    continue
+
+        # --- Level 4: Bomber, meteors, shooters, zigzag, regular enemies ---
+        if level == 4 and not greg_active and not greg_defeated:
+            # Bomber logic
+            if not bomber_enemy and bomber_respawn_timer <= 0:
+                bomber_enemy = [random.randint(0, WIDTH-50), 80, 3, 0]  # x, y, vx, bomb_timer
+                bomber_respawn_timer = 0
+            elif not bomber_enemy:
+                bomber_respawn_timer = max(0, bomber_respawn_timer - 1)
+            if bomber_enemy:
+                bomber_enemy[0] += bomber_enemy[2]
+                if bomber_enemy[0] < 0 or bomber_enemy[0] > WIDTH-50:
+                    bomber_enemy[2] *= -1
+                WIN.blit(ENEMY_BOMBER_IMG, (bomber_enemy[0], bomber_enemy[1]))
+                bomber_enemy[3] += 1
+                if bomber_enemy[3] > 40:
+                    bomber_enemy[3] = 0
+                    bomber_bombs.append([bomber_enemy[0]+25, bomber_enemy[1]+40, 7])
+                bomber_rect = pygame.Rect(bomber_enemy[0], bomber_enemy[1], 50, 40)
+                if bomber_rect.colliderect(player1_rect):
+                    player1_lives -= 1
+                    bomber_enemy = None
+                    bomber_respawn_timer = 240
+                    if player1_lives <= 0:
+                        game_over = True
+                elif multiplayer and bomber_rect.colliderect(player2_rect):
+                    player2_lives -= 1
+                    bomber_enemy = None
+                    bomber_respawn_timer = 240
+                    if player2_lives <= 0:
+                        game_over = True
+                # --- Bomber bullet collision ---
+                for b in player1_bullets[:]:
+                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                    if bullet_rect.colliderect(bomber_rect):
+                        player1_bullets.remove(b)
+                        bomber_enemy = None
+                        bomber_respawn_timer = 120
+                        player1_score += 10
+                        level4_score += 10
+                        break
+                if multiplayer and bomber_enemy:
+                    for b in player2_bullets[:]:
+                        bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                        if bullet_rect.colliderect(bomber_rect):
+                            player2_bullets.remove(b)
+                            bomber_enemy = None
+                            bomber_respawn_timer = 120
+                            player2_score += 10
+                            level4_score += 10
+                            break
+
+            for bomb in bomber_bombs[:]:
+                bomb[1] += bomb[2]
+                pygame.draw.rect(WIN, (255, 200, 0), (bomb[0], bomb[1], 16, 24))
+                if pygame.Rect(bomb[0], bomb[1], 16, 24).colliderect(player1_rect):
+                    player1_lives -= 1
+                    bomber_bombs.remove(bomb)
+                    if player1_lives <= 0:
+                        game_over = True
+                elif multiplayer and pygame.Rect(bomb[0], bomb[1], 16, 24).colliderect(player2_rect):
+                    player2_lives -= 1
+                    bomber_bombs.remove(bomb)
+                    if player2_lives <= 0:
+                        game_over = True
+                elif bomb[1] > HEIGHT:
+                    bomber_bombs.remove(bomb)
+
+            # --- Shooter enemies (now present in level 4) ---
+            for s in shooter_enemies:
+                if not s['alive']:
+                    s['respawn_timer'] -= 1
+                    if s['respawn_timer'] <= 0:
+                        s['x'] = 0 if s['dir'] == 1 else WIDTH-50
+                        s['y'] = 100
+                        s['shoot_timer'] = 0
+                        s['burst_count'] = 0
+                        s['alive'] = True
+                else:
+                    s['x'] += s['dir']*2
+                    if s['x'] < 0 or s['x'] > WIDTH-50:
+                        s['dir'] *= -1
+                    WIN.blit(ENEMY_SHOOTER_IMG, (s['x'], s['y']))
+                    s['shoot_timer'] += 1
+                    if s['shoot_timer'] > 30 and s['burst_count'] < 3:
+                        s['shoot_timer'] = 0
+                        s['burst_count'] += 1
+                        for px, py in [(player1_x, player1_y)] + ([(player2_x, player2_y)] if multiplayer else []):
+                            dx = (px + PLAYER_WIDTH//2) - (s['x'] + 25)
+                            dy = (py + PLAYER_HEIGHT//2) - (s['y'] + 40)
+                            length = math.hypot(dx, dy)
+                            if length == 0: length = 1
+                            vx = dx / length * 7
+                            vy = dy / length * 7
+                            meteors.append([s['x']+25, s['y']+40, math.atan2(vy, vx), 8])
+                    if s['burst_count'] >= 3 and s['shoot_timer'] > 60:
+                        s['burst_count'] = 0
+                        s['shoot_timer'] = 0
+                    shooter_rect = pygame.Rect(s['x'], s['y'], 50, 40)
+                    if shooter_rect.colliderect(player1_rect):
+                        player1_lives -= 1
+                        s['alive'] = False
+                        s['respawn_timer'] = 180
+                        if player1_lives <= 0:
+                            game_over = True
+                    elif multiplayer and shooter_rect.colliderect(player2_rect):
+                        player2_lives -= 1
+                        s['alive'] = False
+                        s['respawn_timer'] = 180
+                        if player2_lives <= 0:
+                            game_over = True
+                # --- Shooter bullet collision ---
+                if s['alive']:
+                    for b in player1_bullets[:]:
+                        bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                        shooter_rect = pygame.Rect(s['x'], s['y'], 50, 40)
+                        if bullet_rect.colliderect(shooter_rect):
+                            player1_bullets.remove(b)
+                            s['alive'] = False
+                            s['respawn_timer'] = 120
+                            player1_score += 10
+                            level4_score += 10
+                            break
+                    if multiplayer and s['alive']:
+                        for b in player2_bullets[:]:
+                            bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                            shooter_rect = pygame.Rect(s['x'], s['y'], 50, 40)
+                            if bullet_rect.colliderect(shooter_rect):
+                                player2_bullets.remove(b)
+                                s['alive'] = False
+                                s['respawn_timer'] = 120
+                                player2_score += 10
+                                level4_score += 10
+                                break
+
+        # --- Greg boss spawn logic (level 4 boss) ---
+        if level == 4 and not greg_active and not greg_defeated and level4_score >= 50:
+            greg_active = True
+            greg_intro = True
+            greg_intro_timer = 120
+            greg_health = 60
+            greg_x = WIDTH // 2 - 60
+            greg_y = 60
+            greg_vx = 8
+            greg_particles.clear()
+            greg_particle_timer = 0
+
+        # --- Greg boss logic (spread slow, small, wide particles, must dodge) ---
+        if greg_active and not greg_defeated:
+            if greg_intro:
+                WIN.blit(LEVEL4_BG, (0, 0))
+                name_text = BIG_FONT.render("Greg the Guardian", True, (50, 255, 50))
+                WIN.blit(name_text, (WIDTH//2 - name_text.get_width()//2, 20))
+                greg_intro_timer -= 1
+                if greg_intro_timer <= 0:
+                    greg_intro = False
+            else:
+                WIN.blit(GREG_IMG, (greg_x, greg_y))
+                greg_x += greg_vx
+                if greg_x <= 0 or greg_x >= WIDTH - 120:
+                    greg_vx *= -1
+
+                # Fire a spread of slow, small particles every 120 frames (was 70)
+                greg_particle_timer += 1
+                if greg_particle_timer >= 120:
+                    greg_particle_timer = 0
+                    num_particles = 9
+                    spread = math.radians(120)  # wider spread
+                    base_angle = math.pi / 2  # straight down
+                    for i in range(num_particles):
+                        angle = base_angle - spread/2 + i * (spread/(num_particles-1))
+                        speed = 2
+                        greg_particles.append([greg_x + 60, greg_y + 60, angle, speed])
+
+                # Move and draw Greg's particles (smaller size)
+                for p in greg_particles[:]:
+                    p[0] += p[3] * math.cos(p[2])
+                    p[1] += p[3] * math.sin(p[2])
+                    pygame.draw.circle(WIN, (50, 255, 50), (int(p[0]), int(p[1])), 6)
+                    particle_rect = pygame.Rect(p[0]-6, p[1]-6, 12, 12)
+                    if particle_rect.colliderect(player1_rect):
+                        player1_lives -= 1
+                        greg_particles.remove(p)
+                        if player1_lives <= 0:
+                            game_over = True
+                    elif multiplayer and particle_rect.colliderect(player2_rect):
+                        player2_lives -= 1
+                        greg_particles.remove(p)
+                        if player2_lives <= 0:
+                            game_over = True
+                    elif p[1] > HEIGHT or p[0] < -12 or p[0] > WIDTH+12:
+                        greg_particles.remove(p)
+
+                # Greg collision with player
+                greg_rect = pygame.Rect(greg_x, greg_y, 120, 60)
+                if greg_rect.colliderect(player1_rect):
+                    player1_lives -= 1
+                    if player1_lives <= 0:
+                        game_over = True
+                if multiplayer and greg_rect.colliderect(player2_rect):
+                    player2_lives -= 1
+                    if player2_lives <= 0:
+                        game_over = True
+
+                # Player bullets hit Greg
+                for b in player1_bullets[:]:
+                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                    if bullet_rect.colliderect(greg_rect):
+                        player1_bullets.remove(b)
+                        greg_health -= 1
+                        player1_score += 10
+                        level4_score += 10
+                        break
+                if multiplayer:
+                    for b in player2_bullets[:]:
+                        bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                        if bullet_rect.colliderect(greg_rect):
+                            player2_bullets.remove(b)
+                            greg_health -= 1
+                            player2_score += 10
+                            level4_score += 10
+                            break
+
+                # Greg defeated
+                if greg_health <= 0:
+                    WIN.blit(LEVEL4_BG, (0, 0))
+                    win_text = BIG_FONT.render("Boss Defeated!", True, (50, 255, 50))
+                    WIN.blit(win_text, (WIDTH//2 - win_text.get_width()//2, HEIGHT//2 - 60))
+                    pygame.display.flip()
+                    pygame.time.wait(2500)
+                    greg_active = False
+                    greg_defeated = True
+                    level = 5
+                    overlord_active = True  # Activate final boss
                     meteors.clear()
                     enemies.clear()
                     zigzag_enemies.clear()
