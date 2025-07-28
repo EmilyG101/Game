@@ -173,7 +173,7 @@ def game_loop(multiplayer=False):
 
     # Level 5/final boss variables
     overlord_active = False
-    overlord_health = 120
+    overlord_health = 210  # 60+40+50+60
     overlord_x = WIDTH // 2 - 90
     overlord_y = 40
     overlord_vx = 6
@@ -181,6 +181,9 @@ def game_loop(multiplayer=False):
     overlord_homing = []
     overlord_shoot_timer = 0
     overlord_defeated = False
+    overlord_intro = False
+    overlord_intro_timer = 0
+    overlord_name = "The Overlord"
     level5_score = 0
 
     while run:
@@ -938,6 +941,7 @@ def game_loop(multiplayer=False):
                     if s['x'] < 0 or s['x'] > WIDTH-50:
                         s['dir'] *= -1
                     WIN.blit(ENEMY_SHOOTER_IMG, (s['x'], s['y']))
+                    # Shooting logic
                     s['shoot_timer'] += 1
                     if s['shoot_timer'] > 30 and s['burst_count'] < 3:
                         s['shoot_timer'] = 0
@@ -953,6 +957,7 @@ def game_loop(multiplayer=False):
                     if s['burst_count'] >= 3 and s['shoot_timer'] > 60:
                         s['burst_count'] = 0
                         s['shoot_timer'] = 0
+                    # Collision
                     shooter_rect = pygame.Rect(s['x'], s['y'], 50, 40)
                     if shooter_rect.colliderect(player1_rect):
                         player1_lives -= 1
@@ -1318,6 +1323,211 @@ def game_loop(multiplayer=False):
                     greg_particles.clear()
                     level4_score = 0
                     continue
+
+        # --- Overlord Final Boss: 4 Phases, Each With Previous Boss Mechanics ---
+        if level == 5 and overlord_active and not overlord_defeated:
+            if not hasattr(game_loop, "overlord_last_phase"):
+                game_loop.overlord_last_phase = 1
+            if not hasattr(game_loop, "overlord_intro_done"):
+                game_loop.overlord_intro_done = False
+
+            if not overlord_intro and not game_loop.overlord_intro_done:
+                overlord_intro = True
+                overlord_intro_timer = 120
+
+            if overlord_intro:
+                WIN.blit(LEVEL5_BG, (0, 0))
+                WIN.blit(OVERLORD_IMG, (overlord_x, overlord_y))
+                name_text = BIG_FONT.render(overlord_name, True, (255, 255, 0))
+                WIN.blit(name_text, (WIDTH//2 - name_text.get_width()//2, overlord_y - 60))
+                overlord_intro_timer -= 1
+                pygame.display.flip()
+                if overlord_intro_timer <= 0:
+                    overlord_intro = False
+                    game_loop.overlord_intro_done = True
+                continue
+
+            WIN.blit(LEVEL5_BG, (0, 0))
+            WIN.blit(OVERLORD_IMG, (overlord_x, overlord_y))
+
+            # Health bar
+            pygame.draw.rect(WIN, (255,0,0), (overlord_x, overlord_y-20, 180, 10))
+            pygame.draw.rect(WIN, (0,255,0), (overlord_x, overlord_y-20, int(180*overlord_health/210), 10))
+
+            # Determine phase
+            if overlord_health > 150:
+                phase = 1  # Boss 1
+            elif overlord_health > 110:
+                phase = 2  # Boss 2
+            elif overlord_health > 60:
+                phase = 3  # Boss 3
+            else:
+                phase = 4  # Greg
+
+            # Restore life at phase change
+            if phase > game_loop.overlord_last_phase:
+                if player1_lives < 3:
+                    player1_lives += 1
+                if multiplayer and player2_lives < 3:
+                    player2_lives += 1
+                game_loop.overlord_last_phase = phase
+
+            overlord_rect = pygame.Rect(overlord_x, overlord_y, 180, 100)
+
+            # --- Phase 1: Boss 1 (Triad) - Shoots bursts ---
+            if phase == 1:
+                if not hasattr(game_loop, "overlord_burst_pause"):
+                    game_loop.overlord_burst_pause = 0
+                    game_loop.overlord_fire_timer = 0
+                    game_loop.overlord_burst_count = 0
+                if game_loop.overlord_burst_pause > 0:
+                    game_loop.overlord_burst_pause -= 1
+                else:
+                    game_loop.overlord_fire_timer += 1
+                    if game_loop.overlord_fire_timer > 15:
+                        game_loop.overlord_fire_timer = 0
+                        game_loop.overlord_burst_count += 1
+                        for i in range(-1, 2):
+                            overlord_bullets.append([overlord_x + 90 + i*60, overlord_y + 100, 7])
+                        if game_loop.overlord_burst_count >= 3:
+                            game_loop.overlord_burst_pause = 60
+                            game_loop.overlord_burst_count = 0
+                overlord_x += random.choice([-1, 0, 1]) * 2
+                overlord_x = max(0, min(WIDTH-180, overlord_x))
+                for b in overlord_bullets[:]:
+                    b[1] += b[2]
+                    pygame.draw.rect(WIN, (255, 50, 50), (b[0], b[1], 12, 18))
+                    if pygame.Rect(b[0], b[1], 12, 18).colliderect(player1_rect):
+                        player1_lives -= 1
+                        overlord_bullets.remove(b)
+                        if player1_lives <= 0:
+                            game_over = True
+                    elif multiplayer and pygame.Rect(b[0], b[1], 12, 18).colliderect(player2_rect):
+                        player2_lives -= 1
+                        overlord_bullets.remove(b)
+                        if player2_lives <= 0:
+                            game_over = True
+                    elif b[1] > HEIGHT:
+                        overlord_bullets.remove(b)
+
+            # --- Phase 2: Boss 2 (Bomber) - Drops bombs ---
+            elif phase == 2:
+                if not hasattr(game_loop, "overlord_bomb_timer"):
+                    game_loop.overlord_bomb_timer = 0
+                overlord_x += overlord_vx
+                if overlord_x <= 0 or overlord_x >= WIDTH - 180:
+                    overlord_vx *= -1
+                game_loop.overlord_bomb_timer += 1
+                if game_loop.overlord_bomb_timer > 60:
+                    game_loop.overlord_bomb_timer = 0
+                    overlord_bullets.append([overlord_x + 90, overlord_y + 100, 6])
+                for bomb in overlord_bullets[:]:
+                    bomb[1] += bomb[2]
+                    pygame.draw.rect(WIN, (255, 200, 0), (bomb[0], bomb[1], 16, 24))
+                    if pygame.Rect(bomb[0], bomb[1], 16, 24).colliderect(player1_rect):
+                        player1_lives -= 1
+                        overlord_bullets.remove(bomb)
+                        if player1_lives <= 0:
+                            game_over = True
+                    elif multiplayer and pygame.Rect(bomb[0], bomb[1], 16, 24).colliderect(player2_rect):
+                        player2_lives -= 1
+                        overlord_bullets.remove(bomb)
+                        if player2_lives <= 0:
+                            game_over = True
+                    elif bomb[1] > HEIGHT:
+                        overlord_bullets.remove(bomb)
+
+            # --- Phase 3: Boss 3 (Charger) - Charges vertically ---
+            elif phase == 3:
+                if not hasattr(game_loop, "overlord_charge_y"):
+                    game_loop.overlord_charge_y = overlord_y
+                    game_loop.overlord_charge_vy = 7
+                    game_loop.overlord_charge_vx = 0
+                overlord_x += game_loop.overlord_charge_vx
+                game_loop.overlord_charge_y += game_loop.overlord_charge_vy
+                if game_loop.overlord_charge_y > HEIGHT:
+                    target_x = player1_x if not multiplayer or player1_lives >= player2_lives else player2_x
+                    game_loop.overlord_charge_vx = (target_x - overlord_x) / (HEIGHT - (-80)) * 7 if HEIGHT != -80 else 0
+                    overlord_x = random.randint(0, WIDTH-180)
+                    game_loop.overlord_charge_y = -80
+                overlord_y = int(game_loop.overlord_charge_y)
+                overlord_rect = pygame.Rect(overlord_x, overlord_y, 180, 100)
+                if overlord_rect.colliderect(player1_rect):
+                    player1_lives -= 1
+                    overlord_x = random.randint(0, WIDTH-180)
+                    game_loop.overlord_charge_y = -80
+                    if player1_lives <= 0:
+                        game_over = True
+                if multiplayer and overlord_rect.colliderect(player2_rect):
+                    player2_lives -= 1
+                    overlord_x = random.randint(0, WIDTH-180)
+                    game_loop.overlord_charge_y = -80
+                    if player2_lives <= 0:
+                        game_over = True
+
+            # --- Phase 4: Greg - Fires slow spread particles ---
+            elif phase == 4:
+                if not hasattr(game_loop, "overlord_particle_timer"):
+                    game_loop.overlord_particle_timer = 0
+                    game_loop.overlord_particles = []
+                overlord_x += overlord_vx
+                if overlord_x <= 0 or overlord_x >= WIDTH - 180:
+                    overlord_vx *= -1
+                game_loop.overlord_particle_timer += 1
+                if game_loop.overlord_particle_timer >= 120:
+                    game_loop.overlord_particle_timer = 0
+                    num_particles = 9
+                    spread = math.radians(120)
+                    base_angle = math.pi / 2
+                    for i in range(num_particles):
+                        angle = base_angle - spread/2 + i * (spread/(num_particles-1))
+                        speed = 2
+                        game_loop.overlord_particles.append([overlord_x + 90, overlord_y + 50, angle, speed])
+                for p in game_loop.overlord_particles[:]:
+                    p[0] += p[3] * math.cos(p[2])
+                    p[1] += p[3] * math.sin(p[2])
+                    pygame.draw.circle(WIN, (50, 255, 50), (int(p[0]), int(p[1])), 6)
+                    particle_rect = pygame.Rect(p[0]-6, p[1]-6, 12, 12)
+                    if particle_rect.colliderect(player1_rect):
+                        player1_lives -= 1
+                        game_loop.overlord_particles.remove(p)
+                        if player1_lives <= 0:
+                            game_over = True
+                    elif multiplayer and particle_rect.colliderect(player2_rect):
+                        player2_lives -= 1
+                        game_loop.overlord_particles.remove(p)
+                        if player2_lives <= 0:
+                            game_over = True
+                    elif p[1] > HEIGHT or p[0] < -12 or p[0] > WIDTH+12:
+                        game_loop.overlord_particles.remove(p)
+
+            # --- Bullet collision for all phases ---
+            for b in player1_bullets[:]:
+                bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                if bullet_rect.colliderect(overlord_rect):
+                    player1_bullets.remove(b)
+                    overlord_health -= 1
+                    player1_score += 10
+                    break
+            if multiplayer:
+                for b in player2_bullets[:]:
+                    bullet_rect = pygame.Rect(b[0], b[1], BULLET_WIDTH, BULLET_HEIGHT)
+                    if bullet_rect.colliderect(overlord_rect):
+                        player2_bullets.remove(b)
+                        overlord_health -= 1
+                        player2_score += 10
+                        break
+
+            # --- Boss defeated ---
+            if overlord_health <= 0:
+                overlord_defeated = True
+                WIN.blit(LEVEL5_BG, (0, 0))
+                win_text = BIG_FONT.render("You Win!", True, (255, 255, 0))
+                WIN.blit(win_text, (WIDTH//2 - win_text.get_width()//2, HEIGHT//2 - 60))
+                pygame.display.flip()
+                pygame.time.wait(3000)
+                run = False
+                continue
 
         # --- Player Bullets ---
         for b in player1_bullets[:]:
